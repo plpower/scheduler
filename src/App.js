@@ -1,51 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import 'rbx/index.css';
 import { Button, Container, Title } from 'rbx';
+import firebase from 'firebase/app';
+import 'firebase/database';
 
-const schedule = {
-  "title": "CS Courses for 2018-2019",
-  "courses": [
-    {
-      "id": "F101",
-      "title": "Computer Science: Concepts, Philosophy, and Connections",
-      "meets": "MWF 11:00-11:50"
-    },
-    {
-      "id": "F110",
-      "title": "Intro Programming for non-majors",
-      "meets": "MWF 10:00-10:50"
-    },
-    {
-      "id": "F111",
-      "title": "Fundamentals of Computer Programming I",
-      "meets": "MWF 13:00-13:50"
-    },
-    {
-      "id": "F211",
-      "title": "Fundamentals of Computer Programming II",
-      "meets": "TuTh 12:30-13:50"
-    }
-  ]
+const firebaseConfig = {
+  apiKey: "AIzaSyCmppenPvDvLR1nQ41ONn1yaeE_X2blSe0",
+  authDomain: "scheduler-aa2af.firebaseapp.com",
+  databaseURL: "https://scheduler-aa2af.firebaseio.com",
+  projectId: "scheduler-aa2af",
+  storageBucket: "scheduler-aa2af.appspot.com",
+  messagingSenderId: "185928165166",
+  appId: "1:185928165166:web:e7c65b689250f47325fcbf",
+  measurementId: "G-W0WBNMHXBJ"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database().ref();
+
+// const schedule = {
+//   "title": "CS Courses for 2018-2019",
+//   "courses": [
+//     {
+//       "id": "F101",
+//       "title": "Computer Science: Concepts, Philosophy, and Connections",
+//       "meets": "MWF 11:00-11:50"
+//     },
+//     {
+//       "id": "F110",
+//       "title": "Intro Programming for non-majors",
+//       "meets": "MWF 10:00-10:50"
+//     },
+//     {
+//       "id": "F111",
+//       "title": "Fundamentals of Computer Programming I",
+//       "meets": "MWF 13:00-13:50"
+//     },
+//     {
+//       "id": "F211",
+//       "title": "Fundamentals of Computer Programming II",
+//       "meets": "TuTh 12:30-13:50"
+//     }
+//   ]
+// };
 
 const App = () => {
   const [schedule, setSchedule] = useState({ title: '', courses: [] });
-  const url = 'https://courses.cs.northwestern.edu/394/data/cs-courses.php';
- 
+
   useEffect(() => {
-    const fetchSchedule = async () => {
-      const response = await fetch(url);
-      if (!response.ok) throw response;
-      const json = await response.json();
-      setSchedule(addScheduleTimes(json));
+    const handleData = snap => {
+      if (snap.val()) setSchedule(addScheduleTimes(snap.val()));
     }
-    fetchSchedule();
-  }, [])
+    db.on('value', handleData, error => alert(error));
+    return () => { db.off('value', handleData); };
+  }, []);
 
   return (
     <Container>
-      <Banner title={ schedule.title } />
-      <CourseList courses={ schedule.courses } />
+      <Banner title={schedule.title} />
+      <CourseList courses={schedule.courses} />
     </Container>
   );
 };
@@ -103,11 +115,25 @@ const getCourseNumber = course => (
 const Course = ({ course, state }) => (
   <Button color={buttonColor(state.selected.includes(course))}
     onClick={() => state.toggle(course)}
+    onDoubleClick={() => moveCourse(course)}
     disabled={hasConflict(course, state.selected)}
   >
     {getCourseTerm(course)} CS { getCourseNumber(course)}: { course.title}
   </Button>
 );
+
+const moveCourse = course => {
+  const meets = prompt('Enter new meeting data, in this format:', course.meets);
+  if (!meets) return;
+  const { days } = timeParts(meets);
+  if (days) saveCourse(course, meets);
+  else moveCourse(course);
+};
+
+const saveCourse = (course, meets) => {
+  db.child('courses').child(course.id).update({ meets })
+    .catch(error => alert(error));
+};
 
 const useSelection = () => {
   const [selected, setSelected] = useState([]);
@@ -143,7 +169,7 @@ const addCourseTimes = course => ({
 
 const addScheduleTimes = schedule => ({
   title: schedule.title,
-  courses: schedule.courses.map(addCourseTimes)
+  courses: Object.values(schedule.courses).map(addCourseTimes)
 });
 
 const daysOverlap = (days1, days2) => (
